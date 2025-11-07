@@ -20,12 +20,12 @@ A Home Assistant custom integration to monitor and control [Indevolt](https://ww
     8. Enter AT command in message box: AT+IGDEVICEIP.
     9. Click Send.
     10. INDEVOLT devices on the same network will respond with their IP address and serial number (SN).  
-<img width="282" height="382" alt="1set_udp" src="https://github.com/user-attachments/assets/68674988-fc59-438e-b703-548eff6167d7" />
+    <img width="200" alt="1set_udp" src="https://github.com/user-attachments/assets/68674988-fc59-438e-b703-548eff6167d7" />
 
-<img width="1322" height="1122" alt="2obtain_ip" src="https://github.com/user-attachments/assets/027b3e69-81b4-4894-bd7f-ca5b5b204ceb" />
+    <img width="800" alt="2obtain_ip" src="https://github.com/user-attachments/assets/027b3e69-81b4-4894-bd7f-ca5b5b204ceb" />
 
 - [ ] Ensure that the Indevolt device **API function is enabled**. This integration only supports OpenData HTTP unencrypted mode.
-<img width="1322" height="1512" alt="3http_mode" src="https://github.com/user-attachments/assets/67f8ed96-abb8-4368-b3f3-b2a3484bd4b9" />
+<img width="800" alt="3http_mode" src="https://github.com/user-attachments/assets/67f8ed96-abb8-4368-b3f3-b2a3484bd4b9" />
 
 - [ ] Confirm the firmware version meets the minimum requirement.
 
@@ -34,8 +34,7 @@ A Home Assistant custom integration to monitor and control [Indevolt](https://ww
   | BK1600/BK1600Ultra          | V1.3.0A_R006.072_M4848_00000039 |
   | SolidFlex2000/PowerFlex2000 | V1.3.09_R00D.012_M4801_00000015 |
 
-<img width="837" height="1491" alt="4fw_version" src="https://github.com/user-attachments/assets/7fb6d58f-9c95-4945-b588-810e68481f5b" />
-
+<img width="400" alt="4fw_version" src="https://github.com/user-attachments/assets/7fb6d58f-9c95-4945-b588-810e68481f5b" />
 
 
 ## Step 1: Download the indevolt integration folder
@@ -99,7 +98,7 @@ config directory/
 3. Click **Restart Home Assistant**.
 4. Click **RESTART**.
 
-<img width="1614" height="857" alt="5restart_ha" src="https://github.com/user-attachments/assets/1270a590-faf8-43a4-8989-27923d1f3887" />
+<img width="1000" alt="5restart_ha" src="https://github.com/user-attachments/assets/1270a590-faf8-43a4-8989-27923d1f3887" />
 
 
 ## Step 6: Add integration to Home Assistant
@@ -114,15 +113,15 @@ config directory/
    - device_model: the model of your Indevolt device
 5. Click **SUBMIT** to finish the installation.
 
-<img width="1000" height="894" alt="6add_integration" src="https://github.com/user-attachments/assets/b435073a-cd55-49fb-bcae-ffd698821c1a" />
-<img width="544" height="703" alt="7add_device" src="https://github.com/user-attachments/assets/ce18f3e0-9658-4052-bbbd-02dfea022dbb" />
+<img width="600" alt="6add_integration" src="https://github.com/user-attachments/assets/b435073a-cd55-49fb-bcae-ffd698821c1a" />
+<img width="300" alt="7add_device" src="https://github.com/user-attachments/assets/ce18f3e0-9658-4052-bbbd-02dfea022dbb" />
 
 
 ## View Integration
 
 Select the INDEVOLT integration to display the device and entity information.
 
-<img width="1124" height="851" alt="8view_integration" src="https://github.com/user-attachments/assets/731e767d-c41c-4c5e-b1f6-a6eae28fffd7" />
+<img width="800" alt="8view_integration" src="https://github.com/user-attachments/assets/731e767d-c41c-4c5e-b1f6-a6eae28fffd7" />
 
 
 
