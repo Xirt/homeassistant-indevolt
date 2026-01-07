@@ -15,7 +15,6 @@ from homeassistant.const import (
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -179,12 +178,6 @@ SENSORS_GEN2: Final = (
         translation_key="serial_number",
     ),
     # System Operating Information
-    IndevoltSensorEntityDescription(
-        key="7101",
-        name="Working mode",
-        state_mapping={1: "Self-consumed Prioritized", 5: "Charge/Discharge Schedule"},
-        device_class=SensorDeviceClass.ENUM,
-    ),
     IndevoltSensorEntityDescription(
         key="142",
         name="Rated capacity",
@@ -423,7 +416,11 @@ SENSORS_GEN2: Final = (
 )
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up the sensor platform for Indevolt.
 
     This function is called by Home Assistant when the integration is set up.
@@ -446,27 +443,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 class IndevoltSensorEntity(CoordinatorEntity, SensorEntity):
     """Represents a sensor entity for Indevolt devices."""
 
-    # Enable entity name as the only name (without device name prefix)
     _attr_has_entity_name = True
     entity_description: IndevoltSensorEntityDescription
 
     def __init__(self, coordinator, description: IndevoltSensorEntityDescription) -> None:
         """Initialize the Indevolt sensor entity."""
         super().__init__(coordinator)
+
         self.entity_description = description
+        self._attr_unique_id = f"{coordinator.config_entry.entry_id}_{description.key}"
+        self._attr_device_info = coordinator.device_info
 
-        sn = coordinator.config_entry.data.get("sn", "unknown")
-        model = coordinator.config_entry.data.get("device_model", "unknown")
-        self._attr_unique_id = f"{DOMAIN}_{sn}_{coordinator.config_entry.entry_id}_{description.key}"
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
-            manufacturer="INDEVOLT",
-            name=f"INDEVOLT {model}",
-            serial_number=sn,
-            model=model,
-            sw_version=coordinator.config_entry.data.get("fw_version", "unknown"),
-        )
         if description.device_class == SensorDeviceClass.ENUM:
             self._attr_options = list(set(description.state_mapping.values()))
 

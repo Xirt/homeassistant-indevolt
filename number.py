@@ -39,17 +39,16 @@ class IndevoltNumberEntity(CoordinatorEntity, NumberEntity):
     """Base class for Indevolt number entities."""
 
     _attr_mode = NumberMode.BOX
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator: IndevoltCoordinator, config_entry: ConfigEntry) -> None:
         """Initialize the number entity."""
         super().__init__(coordinator)
         self.coordinator = coordinator
+
         name_suffix = (self._attr_name or "").replace(" ", "_").lower()
         self._attr_unique_id = f"{config_entry.entry_id}_{name_suffix}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": f"Indevolt {coordinator.config['device_model']}",
-        }
+        self._attr_device_info = coordinator.device_info
 
     @property
     def native_value(self) -> float | None:

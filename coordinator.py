@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
@@ -52,6 +53,21 @@ class IndevoltCoordinator(DataUpdateCoordinator):
     def config(self) -> dict:
         """Helper to access combined config data and options."""
         return {**self.config_entry.data, **self.config_entry.options}
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device info for entities."""
+        sn = self.config_entry.data.get("sn", "unknown")
+        model = self.config_entry.data.get("device_model", "unknown")
+
+        return DeviceInfo(
+            identifiers={(DOMAIN, self.config_entry.entry_id)},
+            manufacturer="INDEVOLT",
+            name=f"INDEVOLT {model}",
+            serial_number=sn,
+            model=model,
+            sw_version=self.config_entry.data.get("fw_version", "unknown"),
+        )
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch raw JSON data from the device."""

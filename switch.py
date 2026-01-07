@@ -38,12 +38,10 @@ class IndevoltSwitchEntity(CoordinatorEntity, SwitchEntity):
         """Initialize the switch entity."""
         super().__init__(coordinator)
         self.coordinator = coordinator
+
         name_suffix = (self._attr_name or "").replace(" ", "_").lower()
         self._attr_unique_id = f"{config_entry.entry_id}_{name_suffix}"
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": f"Indevolt {coordinator.config['device_model']}",
-        }
+        self._attr_device_info = coordinator.device_info
 
     @property
     def is_on(self) -> bool | None:
