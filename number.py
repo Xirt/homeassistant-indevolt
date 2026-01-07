@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import IndevoltCoordinator
+from .utils import get_device_gen
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,15 +25,22 @@ async def async_setup_entry(
     """Set up number entities from a config entry."""
     coordinator: IndevoltCoordinator = hass.data[DOMAIN][config_entry.entry_id]
 
-    async_add_entities(
-        [
-            ChargeLimitNumber(coordinator, config_entry),
-            DischargeLimitNumber(coordinator, config_entry),
-            MaxACOutputPowerNumber(coordinator, config_entry),
-            InverterInputLimit(coordinator, config_entry),
-            FeedinPowerLimit(coordinator, config_entry),
-        ]
-    )
+    # Add generation 1 entities
+    # entities: list[IndevoltNumberEntity] = [ChargeLimitNumber(coordinator, config_entry)]
+    entities: list[IndevoltNumberEntity] = []
+
+    # Add generation 2 entities (if applicable)
+    if get_device_gen(coordinator.config["device_model"]) != 1:
+        entities.extend(
+            [
+                DischargeLimitNumber(coordinator, config_entry),
+                MaxACOutputPowerNumber(coordinator, config_entry),
+                InverterInputLimit(coordinator, config_entry),
+                FeedinPowerLimit(coordinator, config_entry),
+            ]
+        )
+
+    async_add_entities(entities)
 
 
 class IndevoltNumberEntity(CoordinatorEntity, NumberEntity):
@@ -75,8 +83,9 @@ class IndevoltNumberEntity(CoordinatorEntity, NumberEntity):
             raise
 
 
-class ChargeLimitNumber(IndevoltNumberEntity):
-    """Number entity for Charge Limit percentage (target SOC)."""
+"""Number entity for Charge Limit percentage (target SOC)."""
+"""Placeholder: The read point for this sensor is still unclear"""
+""" class ChargeLimitNumber(IndevoltNumberEntity):
 
     _attr_name = "Charge Limit"
     _attr_icon = "mdi:battery-alert"
@@ -86,12 +95,10 @@ class ChargeLimitNumber(IndevoltNumberEntity):
     _attr_native_unit_of_measurement = "%"
 
     def _get_write_cjson_point(self) -> str:
-        """Get the cJson Point for writing Emergency Power value."""
         return "47017"
 
     def _get_current_value(self) -> float | None:
-        """Get the current Emergency Power value."""
-        return self.coordinator.data.get("6002")
+        return self.coordinator.data.get("6002") """
 
 
 class DischargeLimitNumber(IndevoltNumberEntity):
