@@ -330,7 +330,7 @@ SENSORS_GEN2: Final = (
         state_class=SensorStateClass.MEASUREMENT,
     ),
     IndevoltSensorEntityDescription(
-        key="1632",
+        key="1600",
         name="DC Input Voltage 1",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
@@ -351,7 +351,7 @@ SENSORS_GEN2: Final = (
         state_class=SensorStateClass.MEASUREMENT,
     ),
     IndevoltSensorEntityDescription(
-        key="1633",
+        key="1601",
         name="DC Input Voltage 2",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
@@ -372,7 +372,7 @@ SENSORS_GEN2: Final = (
         state_class=SensorStateClass.MEASUREMENT,
     ),
     IndevoltSensorEntityDescription(
-        key="1634",
+        key="1602",
         name="DC Input Voltage 3",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
