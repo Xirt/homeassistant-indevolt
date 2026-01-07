@@ -87,15 +87,6 @@ class IndevoltAPI:
             await api.set_data("47016", 100)
             await api.set_data(47016, "100")
         """
-
-        _LOGGER.info(
-            "Pushing data to device - t: %s (type: %s), v: %s (type: %s)",
-            t,
-            type(t).__name__,
-            v,
-            type(v).__name__,
-        )
-
         # Convert v to list if not already
         if not isinstance(v, list):
             v = [v]
