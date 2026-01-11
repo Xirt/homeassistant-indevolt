@@ -218,14 +218,14 @@ SENSORS_GEN2: Final = (
     # Electrical Energy Information
     IndevoltSensorEntityDescription(
         key="2107",
-        name="Total AC Output Energy",
+        name="Total AC Input Energy",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
     IndevoltSensorEntityDescription(
         key="2104",
-        name="Total AC Input Energy",
+        name="Total AC Output Energy",
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -521,3 +521,4 @@ class IndevoltSensorEntity(CoordinatorEntity, SensorEntity):
             return self.entity_description.state_mapping.get(raw_value)
 
         return raw_value * self.entity_description.coefficient
+
