@@ -17,7 +17,15 @@ from .coordinator import IndevoltCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-SERVICE_SCHEMA = vol.Schema(
+SERVICE_SCHEMA_CHARGE = vol.Schema(
+    {
+        vol.Required(CONF_DEVICE_ID): cv.string,
+        vol.Required("power"): cv.positive_int,
+        vol.Required("target_soc"): cv.positive_int,
+    }
+)
+
+SERVICE_SCHEMA_DISCHARGE = vol.Schema(
     {
         vol.Required(CONF_DEVICE_ID): cv.string,
         vol.Required("power"): cv.positive_int,
@@ -138,14 +146,13 @@ async def _async_register_services(hass: HomeAssistant) -> None:
     async def charge(call: ServiceCall) -> None:
         """Handle the service call to start charging."""
         device_id = call.data[CONF_DEVICE_ID]
+        target_soc = call.data["target_soc"]
         power = call.data["power"]
 
         coordinator = await _get_coordinator_from_device(hass, device_id)
 
         # Ensure device is in Real-time Control mode
         if await _ensure_realtime_control_mode(coordinator):
-            target_soc = coordinator.data.get("6002", 10)
-
             _LOGGER.info("Charging %s with power: %s, target SOC: %s", device_id, power, target_soc)
             await coordinator.async_push_data("47015", [1, power, target_soc])
             await coordinator.async_request_refresh()
@@ -156,6 +163,14 @@ async def _async_register_services(hass: HomeAssistant) -> None:
         power = call.data["power"]
 
         coordinator = await _get_coordinator_from_device(hass, device_id)
+
+        # Validate power based on device generation
+        generation = get_device_gen(coordinator.config_entry.data.get("device_model"))
+        max_power = 2400 if generation == 2 else 800
+        if power > max_power:
+            raise ServiceValidationError(
+                f"Power {power}W exceeds maximum {max_power}W for generation {generation} devices"
+            )
 
         # Ensure device is in Real-time Control mode
         if await _ensure_realtime_control_mode(coordinator):
@@ -177,9 +192,9 @@ async def _async_register_services(hass: HomeAssistant) -> None:
             await coordinator.async_push_data("47015", [0, 0, 0])
             await coordinator.async_request_refresh()
 
-    hass.services.async_register(DOMAIN, "charge", charge, schema=SERVICE_SCHEMA)
-    hass.services.async_register(DOMAIN, "discharge", discharge, schema=SERVICE_SCHEMA)
-    hass.services.async_register(DOMAIN, "stop", stop, schema=STOP_SERVICE_SCHEMA)
+    hass.services.async_register(DOMAIN, "charge", charge, schema=SERVICE_SCHEMA_CHARGE)
+    hass.services.async_register(DOMAIN, "discharge", discharge, schema=SERVICE_SCHEMA_DISCHARGE)
+    hass.services.async_register(DOMAIN, "stop", stop, schema=SERVICE_SCHEMA_CHARGE)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

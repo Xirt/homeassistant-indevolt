@@ -18,8 +18,18 @@ charge:
       selector:
         number:
           min: 100
-          max: 1200
+          max: 2400
           unit_of_measurement: w
+    target_soc:
+      description: The target state of charge (SOC) percentage to charge the battery to.
+      name: Target SOC
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
 
 discharge:
   name: Discharge Battery (real-time mode)
@@ -39,7 +49,7 @@ discharge:
       selector:
         number:
           min: 0
-          max: 800
+          max: 2400
           unit_of_measurement: w
 
 stop:
