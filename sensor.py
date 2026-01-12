@@ -226,7 +226,7 @@ SENSORS_GEN2: Final = (
     IndevoltSensorEntityDescription(
         key="2104",
         name="Total AC Output Energy",
-        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
