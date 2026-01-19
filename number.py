@@ -2,176 +2,150 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import logging
+from typing import Final
 
-from homeassistant.components.number import NumberEntity, NumberMode
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.number import NumberEntity, NumberEntityDescription, NumberMode
+from homeassistant.const import PERCENTAGE, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import IndevoltCoordinator
-from .utils import get_device_gen
+from .coordinator import IndevoltCoordinator, IndevoltConfigEntry
+from .entity import IndevoltEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+PARALLEL_UPDATES = 1
+
+
+@dataclass(frozen=True, kw_only=True)
+class IndevoltNumberEntityDescription(NumberEntityDescription):
+    """Custom entity description class for Indevolt number entities."""
+
+    read_key: str
+    write_key: str
+    generation: list[int] = field(default_factory=lambda: [1, 2])
+
+
+NUMBERS: Final = (
+    IndevoltNumberEntityDescription(
+        key="discharge_limit",
+        generation=[2],
+        translation_key="discharge_limit",
+        read_key="6105",
+        write_key="1142",
+        native_min_value=0,
+        native_max_value=100,
+        native_step=1,
+        native_unit_of_measurement=PERCENTAGE,
+    ),
+    IndevoltNumberEntityDescription(
+        key="max_ac_output_power",
+        generation=[2],
+        translation_key="max_ac_output_power",
+        read_key="11011",
+        write_key="1147",
+        native_min_value=0,
+        native_max_value=2400,
+        native_step=100,
+        native_unit_of_measurement=UnitOfPower.WATT,
+    ),
+    IndevoltNumberEntityDescription(
+        key="inverter_input_limit",
+        generation=[2],
+        translation_key="inverter_input_limit",
+        read_key="11009",
+        write_key="1138",
+        native_min_value=100,
+        native_max_value=2400,
+        native_step=100,
+        native_unit_of_measurement=UnitOfPower.WATT,
+    ),
+    IndevoltNumberEntityDescription(
+        key="feedin_power_limit",
+        generation=[2],
+        translation_key="feedin_power_limit",
+        read_key="11010",
+        write_key="1146",
+        native_min_value=100,
+        native_max_value=2400,
+        native_step=100,
+        native_unit_of_measurement=UnitOfPower.WATT,
+    ),
+)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    entry: IndevoltConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up number entities from a config entry."""
-    coordinator: IndevoltCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    """Set up the number platform for Indevolt."""
+    coordinator = entry.runtime_data
+    device_gen = coordinator.device_info_data.get("generation", 1)
 
-    # Add generation 1 entities
-    # entities: list[IndevoltNumberEntity] = [ChargeLimitNumber(coordinator, config_entry)]
-    entities: list[IndevoltNumberEntity] = []
+    # Initialize number values (first fetch)
+    initial_keys = [
+        description.read_key
+        for description in NUMBERS
+        if device_gen in description.generation
+    ]
+    coordinator.set_initial_sensor_keys(initial_keys)
+    await coordinator.async_config_entry_first_refresh()
 
-    # Add generation 2 entities (if applicable)
-    if get_device_gen(coordinator.config["device_model"]) != 1:
-        entities.extend(
-            [
-                DischargeLimitNumber(coordinator, config_entry),
-                MaxACOutputPowerNumber(coordinator, config_entry),
-                InverterInputLimit(coordinator, config_entry),
-                FeedinPowerLimit(coordinator, config_entry),
-            ]
-        )
-
-    async_add_entities(entities)
+    # Add number entities based on device generation
+    async_add_entities(
+        [
+            IndevoltNumberEntity(coordinator=coordinator, description=description)
+            for description in NUMBERS
+            if device_gen in description.generation
+        ]
+    )
 
 
-class IndevoltNumberEntity(CoordinatorEntity, NumberEntity):
-    """Base class for Indevolt number entities."""
+class IndevoltNumberEntity(IndevoltEntity, NumberEntity):
+    """Represents a number entity for Indevolt devices."""
 
+    entity_description: IndevoltNumberEntityDescription
     _attr_mode = NumberMode.BOX
-    _attr_has_entity_name = True
 
-    def __init__(self, coordinator: IndevoltCoordinator, config_entry: ConfigEntry) -> None:
-        """Initialize the number entity."""
-        super().__init__(coordinator)
-        self.coordinator = coordinator
+    def __init__(
+        self,
+        coordinator: IndevoltCoordinator,
+        description: IndevoltNumberEntityDescription,
+    ) -> None:
+        """Initialize the Indevolt number entity."""
+        super().__init__(coordinator, context=description.read_key)
 
-        name_suffix = (self._attr_name or "").replace(" ", "_").lower()
-        self._attr_unique_id = f"{config_entry.entry_id}_{name_suffix}"
-        self._attr_device_info = coordinator.device_info
+        self.entity_description = description
+        self._attr_unique_id = f"{self.serial_number}_{description.key}"
 
     @property
     def native_value(self) -> float | None:
         """Return the current value."""
-        if self.coordinator.data:
-            return self._get_current_value()
-        return None
-
-    def _get_write_cjson_point(self) -> str:
-        """Get the cJson Point for writing to this entity."""
-        raise NotImplementedError
-
-    def _get_current_value(self) -> float | None:
-        """Get the current value for this entity."""
-        raise NotImplementedError
+        if not self.coordinator.data:
+            return None
+        
+        raw_value = self.coordinator.data.get(self.entity_description.read_key)
+        if raw_value is None:
+            return None
+        
+        return float(raw_value)
 
     async def async_set_native_value(self, value: float) -> None:
         """Set new value."""
         try:
-            await self.coordinator.async_push_data(self._get_write_cjson_point(), int(value))
+            await self.coordinator.async_push_data(
+                self.entity_description.write_key, int(value)
+            )
             await self.coordinator.async_request_refresh()
+
         except Exception as err:
-            _LOGGER.error("Failed to set %s to %s: %s", self.name, value, err)
+            _LOGGER.error(
+                "Failed to set %s to %s: %s",
+                self.entity_description.key,
+                value,
+                err,
+            )
             raise
-
-
-"""Number entity for Charge Limit percentage (target SOC)."""
-"""Placeholder: The read point for this sensor is still unclear"""
-""" class ChargeLimitNumber(IndevoltNumberEntity):
-
-    _attr_name = "Charge Limit"
-    _attr_icon = "mdi:battery-alert"
-    _attr_native_min_value = 0
-    _attr_native_max_value = 100
-    _attr_native_step = 1
-    _attr_native_unit_of_measurement = "%"
-
-    def _get_write_cjson_point(self) -> str:
-        return "47017"
-
-    def _get_current_value(self) -> float | None:
-        return self.coordinator.data.get("6002") """
-
-
-class DischargeLimitNumber(IndevoltNumberEntity):
-    """Number entity for Discharge Limit percentage (emergency power / SOC)."""
-
-    _attr_name = "Discharge Limit"
-    _attr_icon = "mdi:battery-alert"
-    _attr_native_min_value = 0
-    _attr_native_max_value = 100
-    _attr_native_step = 1
-    _attr_native_unit_of_measurement = "%"
-
-    def _get_write_cjson_point(self) -> str:
-        """Get the cJson Point for writing Emergency Power value."""
-        return "1142"
-
-    def _get_current_value(self) -> float | None:
-        """Get the current Emergency Power value."""
-        return self.coordinator.data.get("6105")
-
-
-class MaxACOutputPowerNumber(IndevoltNumberEntity):
-    """Number entity for Max AC Output Power."""
-
-    _attr_name = "Max AC Output Power"
-    _attr_icon = "mdi:lightning-bolt"
-    _attr_native_min_value = 0
-    _attr_native_max_value = 2400
-    _attr_native_step = 100
-    _attr_native_unit_of_measurement = "W"
-
-    def _get_write_cjson_point(self) -> str:
-        """Get the cJson Point for writing Max AC Output Power value."""
-        return "1147"
-
-    def _get_current_value(self) -> float | None:
-        """Get the current Max AC Output Power value."""
-        return self.coordinator.data.get("11011")
-
-
-class InverterInputLimit(IndevoltNumberEntity):
-    """Number entity for Inverter Input Limit."""
-
-    _attr_name = "Inverter Input Limit"
-    _attr_icon = "mdi:current-dc"
-    _attr_native_min_value = 100
-    _attr_native_max_value = 2400
-    _attr_native_step = 100
-    _attr_native_unit_of_measurement = "W"
-
-    def _get_write_cjson_point(self) -> str:
-        """Get the cJson Point for writing Inverter Input Limit value."""
-        return "1138"
-
-    def _get_current_value(self) -> float | None:
-        """Get the current Inverter Input Limit value."""
-        return self.coordinator.data.get("11009")
-
-
-class FeedinPowerLimit(IndevoltNumberEntity):
-    """Number entity for Feed-in Power Limit."""
-
-    _attr_name = "Feed-in Power Limit"
-    _attr_icon = "mdi:current-dc"
-    _attr_native_min_value = 100
-    _attr_native_max_value = 2400
-    _attr_native_step = 100
-    _attr_native_unit_of_measurement = "W"
-
-    def _get_write_cjson_point(self) -> str:
-        """Get the cJson Point for writing Feed-in Power Limit value."""
-        return "1146"
-
-    def _get_current_value(self) -> float | None:
-        """Get the current Feed-in Power Limit value."""
-        return self.coordinator.data.get("11010")

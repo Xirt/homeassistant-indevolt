@@ -1,12 +1,9 @@
-"""Indevolt API client for HTTP communication with devices."""
+"""API client for HTTP communication with Indevolt devices."""
 
 import json
-import logging
 from typing import Any
 
 import aiohttp
-
-_LOGGER = logging.getLogger(__name__)
 
 
 class TimeOutException(Exception):
@@ -53,10 +50,10 @@ class IndevoltAPI:
                     raise APIException(f"HTTP status error: {response.status}")
                 return await response.json()
 
-        except TimeoutError:
-            raise TimeOutException(f"{endpoint} Request timed out") from TimeoutError
+        except TimeoutError as err:
+            raise TimeOutException(f"{endpoint} Request timed out") from err
         except aiohttp.ClientError as err:
-            raise APIException(f"{endpoint} Network error: {err}") from aiohttp.ClientError
+            raise APIException(f"{endpoint} Network error: {err}") from err
 
     async def fetch_data(self, t: Any) -> dict[str, Any]:
         """Fetch raw JSON data from the device.
@@ -69,8 +66,10 @@ class IndevoltAPI:
         """
         if not isinstance(t, list):
             t = [t]
+            
+        t_int = [int(item) for item in t]
 
-        return await self._request("Indevolt.GetData", {"t": t})
+        return await self._request("Indevolt.GetData", {"t": t_int})
 
     async def set_data(self, t: str | int, v: Any) -> dict[str, Any]:
         """Write/push data to the device.
@@ -95,3 +94,29 @@ class IndevoltAPI:
         v_int = [int(item) for item in v]
 
         return await self._request("Indevolt.SetData", {"f": 16, "t": t_int, "v": v_int})
+
+    async def get_config(self) -> dict[str, Any]:
+        """Get system configuration from the device.
+
+        Returns:
+            Device system configuration dictionary
+        """
+        url = f"{self.base_url}/Sys.GetConfig"
+
+        try:
+            async with self.session.get(url, timeout=self.timeout) as response:
+                if response.status != 200:
+                    raise APIException(f"HTTP status error: {response.status}")
+                data = await response.json()
+                
+                # Enrich response with device generation
+                if "device" in data and "type" in data["device"]:
+                    device_type = data["device"]["type"]
+                    data["device"]["generation"] = 2 if device_type in ["CMS-SP2000", "CMS-SF2000"] else 1
+                
+                return data
+
+        except TimeoutError as err:
+            raise TimeOutException("Sys.GetConfig Request timed out") from err
+        except aiohttp.ClientError as err:
+            raise APIException(f"Sys.GetConfig Network error: {err}") from err

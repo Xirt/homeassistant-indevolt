@@ -1,28 +1,20 @@
 # Services for Indevolt integration
 
 charge:
-  name: Charge Battery (real-time mode)
-  description: Configures the battery to start charging based on known load settings.
   fields:
     device_id:
-      name: Device
-      description: The Indevolt device to charge
       required: true
       selector:
         device:
           integration: indevolt
     power:
-      name: Maximum Charging Power
-      description: The maximum Charging Power (Top-Up Power) in Watts.
       required: true
       selector:
         number:
           min: 100
           max: 2400
-          unit_of_measurement: w
+          unit_of_measurement: W
     target_soc:
-      description: The target state of charge (SOC) percentage to charge the battery to.
-      name: Target SOC
       required: true
       selector:
         number:
@@ -32,34 +24,41 @@ charge:
           unit_of_measurement: "%"
 
 discharge:
-  name: Discharge Battery (real-time mode)
-  description: Configures the battery to start discharging to power your home.
   fields:
     device_id:
-      name: Device
-      description: The Indevolt device to discharge
       required: true
       selector:
         device:
           integration: indevolt
     power:
-      name: Maximum Discharge Power
-      description: The maximum Discharging Power (Max AC Output Power) in Watts.
       required: true
       selector:
         number:
           min: 0
           max: 2400
-          unit_of_measurement: w
+          unit_of_measurement: W
 
 stop:
-  name: Stop Battery (real-time mode)
-  description: Puts the battery into standby mode.
   fields:
     device_id:
-      name: Device
-      description: The Indevolt device to discharge
       required: true
       selector:
         device:
           integration: indevolt
+
+change_mode:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: indevolt
+    mode:
+      required: true
+      selector:
+        select:
+          options:
+            - self_consumed_prioritized
+            - real_time_control
+            - charge_discharge_schedule
+          translation_key: working_mode

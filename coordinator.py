@@ -1,4 +1,4 @@
-"""Home Assistant integration for indevolt device."""
+"""Home Assistant integration for Indevolt device."""
 
 from __future__ import annotations
 
@@ -6,112 +6,107 @@ from datetime import timedelta
 import logging
 from typing import Any
 
+from .indevolt_api import IndevoltAPI, TimeOutException
+
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
-from .indevolt_api import IndevoltAPI, TimeOutException
-from .utils import get_device_gen
+from .const import DEFAULT_PORT, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+SCAN_INTERVAL = 30
+
+type IndevoltConfigEntry = ConfigEntry[IndevoltCoordinator]
 
 
-class IndevoltCoordinator(DataUpdateCoordinator):
-    """Coordinator for fetching and pushing data to indevolt devices.
+class IndevoltCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    """Coordinator for fetching and pushing data to indevolt devices."""
 
-    This coordinator manages periodic data updates from indevolt devices and
-    handles writing data back to the device.
-    """
+    config_entry: IndevoltConfigEntry
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        """Initialize the indevolt coordinator.
-
-        Args:
-            hass: Home Assistant instance.
-            config: Configuration dictionary with host, port, and scan_interval.
-        """
+        """Initialize the indevolt coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=entry.data.get("scan_interval", DEFAULT_SCAN_INTERVAL)),
+            update_interval=timedelta(seconds=SCAN_INTERVAL),
+            config_entry=entry,
         )
-        self.config_entry = entry
-        self.session = async_get_clientsession(hass)
 
-        # Initialize Indevolt API.
+        # Initialize Indevolt API
         self.api = IndevoltAPI(
-            host=entry.data["host"],
-            port=entry.data["port"],
-            session=async_get_clientsession(self.hass),
+            host=entry.data[CONF_HOST],
+            port=DEFAULT_PORT,
+            session=async_get_clientsession(hass),
         )
 
-    @property
-    def config(self) -> dict:
-        """Helper to access combined config data and options."""
-        return {**self.config_entry.data, **self.config_entry.options}
+        self.device_info_data: dict[str, Any] = {}
+        self._initial_sensor_keys: list[str] = []
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device info for entities."""
-        sn = self.config_entry.data.get("sn", "unknown")
-        model = self.config_entry.data.get("device_model", "unknown")
+    def set_initial_sensor_keys(self, keys: list[str]) -> None:
+        """Set the initial sensor keys for first data fetch before entities are created."""
+        self._initial_sensor_keys = keys
 
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.config_entry.entry_id)},
-            manufacturer="INDEVOLT",
-            name=f"INDEVOLT {model}",
-            serial_number=sn,
-            model=model,
-            sw_version=self.config_entry.data.get("fw_version", "unknown"),
-        )
+    def _get_api_keys(self) -> list[str]:
+        """Get sensor keys from registered contexts or fall back to initial keys."""
+        api_keys = list(self.async_contexts())
+
+        # Use initial_sensor_keys for first refresh (before sensor creation)
+        if not api_keys:
+            api_keys = self._initial_sensor_keys
+        return api_keys
+
+    async def async_initialize(self) -> None:
+        """Fetch device info once on boot."""
+        try:
+            config_data = await self.api.get_config()
+        except TimeOutException as err:
+            raise ConfigEntryNotReady(
+                f"Device config retrieval timed out: {err}"
+            ) from err
+        except Exception as err:
+            raise ConfigEntryNotReady(f"Device config retrieval failed: {err}") from err
+
+        device_data = config_data.get("device", {})
+
+        # Cache device information
+        self.device_info_data = {
+            "sn": device_data.get("sn"),
+            "device_model": device_data.get("type"),
+            "fw_version": device_data.get("fw"),
+            "generation": device_data.get("generation", 1),
+        }
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch raw JSON data from the device."""
-        try:
-            if get_device_gen(self.config["device_model"]) == 1:
-                keys = [0, 7101, 1664, 1665, 2108, 1502, 1505, 2101, 2107, 1501, 6000, 6001, 6002, 6105, 6004, 6005, 6006, 6007, 7120, 21028]  # fmt: skip
-            else:
-                keys = [0, 7101, 142, 6105, 2618, 11009, 2101, 2108, 11010, 2108, 667, 2107, 2104, 2105, 11034, 1502, 6004, 6005, 6006, 6007, 7120, 11016, 2600, 2612, 6001, 6000, 6002, 1502, 1501, 1532, 1600, 1632, 1664, 1633, 1601, 1665, 1634, 1602, 1666, 1635, 1603, 1667, 11011, 9012, 9030, 9049, 9068, 9163, 9216]  # fmt: skip
+        sensor_keys = self._get_api_keys()
+        if not sensor_keys:
+            return {}
 
-            data: dict[str, Any] = {}
-            for key in keys:
-                result = await self.api.fetch_data([key])
-                data.update(result)
+        try:
+            return await self.api.fetch_data(sensor_keys)
+        except TimeOutException as err:
+            raise UpdateFailed(f"Device update timed out: {err}") from err
+        except Exception as err:
+            raise UpdateFailed(f"Device update failed: {err}") from err
+
+    async def async_push_data(self, key: str, value: Any) -> dict[str, Any]:
+        """Push/write data values to given key to device."""
+        try:
+            result = await self.api.set_data(key, value)
 
         except TimeOutException as err:
-            _LOGGER.warning("Device update timed out: %s", err)
-            raise UpdateFailed(f"Update timed out: {err}") from err
+            raise UpdateFailed(f"Device PUSH timed out: {err}") from err
 
         except Exception as err:
-            _LOGGER.exception("Failed to update device data")
-            raise UpdateFailed(f"Update failed: {err}") from err
+            raise UpdateFailed(f"Device update failed: {err}") from err
 
         else:
-            return data
-
-    async def async_push_data(self, cjson_point: str, value: Any) -> dict[str, Any]:
-        """Push/write data to device.
-
-        Args:
-            cjson_point: cJson Point identifier (e.g., "47015")
-            value: Value to write (will be converted to list if needed)
-
-        Example:
-            await coordinator.async_push_data("47015", [2,700,5])
-            await coordinator.async_push_data("47005", 100)
-        """
-        try:
-            result = await self.api.set_data(cjson_point, value)
-
-        except Exception:
-            _LOGGER.exception("Failed to push data to device for sensor %s", cjson_point)
-            raise
-
-        else:
-            _LOGGER.info("Data pushed to device %s: %s", cjson_point, value)
-            _LOGGER.info("Result of push: %s", str(result))
+            _LOGGER.info("Data pushed to device %s: %s", key, value)
+            _LOGGER.debug("Result of push: %s", str(result))
             return result

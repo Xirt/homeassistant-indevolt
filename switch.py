@@ -2,133 +2,127 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import logging
+from typing import Final
 
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import IndevoltCoordinator
-from .utils import get_device_gen
+from .coordinator import IndevoltCoordinator, IndevoltConfigEntry
+from .entity import IndevoltEntity
 
 _LOGGER = logging.getLogger(__name__)
+
+PARALLEL_UPDATES = 0
+
+
+@dataclass(frozen=True, kw_only=True)
+class IndevoltSwitchEntityDescription(SwitchEntityDescription):
+    """Custom entity description class for Indevolt switch entities."""
+
+    read_key: str
+    write_key: str
+    on_value: int = 1001
+    off_value: int = 1000
+    generation: list[int] = field(default_factory=lambda: [1, 2])
+
+
+SWITCHES: Final = (
+    IndevoltSwitchEntityDescription(
+        key="grid_charging",
+        translation_key="grid_charging",
+        generation=[2],
+        read_key="2618",
+        write_key="1143",
+    ),
+)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    entry: IndevoltConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up switch entities from a config entry."""
-    coordinator: IndevoltCoordinator = hass.data[DOMAIN][config_entry.entry_id]
+    """Set up the switch platform for Indevolt."""
+    coordinator = entry.runtime_data
+    device_gen = coordinator.device_info_data.get("generation", 1)
 
-    # Add generation 1 entities
-    entities: list[IndevoltSwitchEntity] = []
+    # Initialize switch values (first fetch)
+    initial_keys = [
+        description.read_key
+        for description in SWITCHES
+        if device_gen in description.generation
+    ]
+    coordinator.set_initial_sensor_keys(initial_keys)
+    await coordinator.async_config_entry_first_refresh()
 
-    # Add generation 2 entities (if applicable)
-    if get_device_gen(coordinator.config["device_model"]) != 1:
-        entities.extend(
-            [
-                GridChargingSwitch(coordinator, config_entry),
-            ]
-        )
+    # Add switch entities based on device generation
+    async_add_entities(
+        [
+            IndevoltSwitchEntity(coordinator=coordinator, description=description)
+            for description in SWITCHES
+            if device_gen in description.generation
+        ]
+    )
 
-    async_add_entities(entities)
 
+class IndevoltSwitchEntity(IndevoltEntity, SwitchEntity):
+    """Represents a switch entity for Indevolt devices."""
 
-class IndevoltSwitchEntity(CoordinatorEntity, SwitchEntity):
-    """Base class for Indevolt switch entities."""
+    entity_description: IndevoltSwitchEntityDescription
 
-    _attr_has_entity_name = True
+    def __init__(
+        self,
+        coordinator: IndevoltCoordinator,
+        description: IndevoltSwitchEntityDescription,
+    ) -> None:
+        """Initialize the Indevolt switch entity."""
+        super().__init__(coordinator, context=description.read_key)
 
-    def __init__(self, coordinator: IndevoltCoordinator, config_entry: ConfigEntry) -> None:
-        """Initialize the switch entity."""
-        super().__init__(coordinator)
-        self.coordinator = coordinator
-
-        name_suffix = (self._attr_name or "").replace(" ", "_").lower()
-        self._attr_unique_id = f"{config_entry.entry_id}_{name_suffix}"
-        self._attr_device_info = coordinator.device_info
+        self.entity_description = description
+        self._attr_unique_id = f"{self.serial_number}_{description.key}"
 
     @property
     def is_on(self) -> bool | None:
         """Return true if switch is on."""
-        if self.coordinator.data:
-            value = self._get_switch_state()
-            return bool(value) if value is not None else None
-        return None
+        if not self.coordinator.data:
+            return None
 
-    def _get_write_cjson_point(self) -> str:
-        """Get the cJson Point for writing to this entity."""
-        raise NotImplementedError
+        raw_value = self.coordinator.data.get(self.entity_description.read_key)
+        if raw_value is None:
+            return None
 
-    def _get_switch_state(self) -> bool:
-        """Get the current switch state for this entity."""
-        raise NotImplementedError
+        # If on_value is specified, check for exact match
+        if self.entity_description.on_value is not None:
+            return raw_value == self.entity_description.on_value
+
+        # Otherwise, ON means anything except off_value
+        return raw_value != self.entity_description.off_value
 
     async def async_turn_on(self, **kwargs) -> None:
         """Turn the switch on."""
         try:
-            await self.coordinator.async_push_data(self._get_write_cjson_point(), 1)
+            await self.coordinator.async_push_data(self.entity_description.write_key, 1)
             await self.coordinator.async_request_refresh()
         except Exception as err:
-            _LOGGER.error("Failed to turn on %s: %s", self.name, err)
+            _LOGGER.error(
+                "Failed to turn on %s: %s",
+                self.entity_description.key,
+                err,
+            )
             raise
 
     async def async_turn_off(self, **kwargs) -> None:
         """Turn the switch off."""
         try:
-            await self.coordinator.async_push_data(self._get_write_cjson_point(), 0)
+            await self.coordinator.async_push_data(self.entity_description.write_key, 0)
             await self.coordinator.async_request_refresh()
         except Exception as err:
-            _LOGGER.error("Failed to turn off %s: %s", self.name, err)
+            _LOGGER.error(
+                "Failed to turn off %s: %s",
+                self.entity_description.key,
+                err,
+            )
             raise
-
-
-class GridChargingSwitch(IndevoltSwitchEntity):
-    """Switch for Grid Charging."""
-
-    _attr_name = "Grid Charging"
-    _attr_icon = "mdi:transmission-tower"
-
-    def _get_write_cjson_point(self) -> str:
-        """Get the cJson Point for writing Grid Charging state."""
-        return "1143"
-
-    def _get_switch_state(self) -> bool:
-        """Get the current switch state for this entity."""
-        val = self.coordinator.data.get("2618")
-        return val != 1000
-
-
-"""Switch for enabling / disabling Bypass."""
-"""Placeholder: The read point for this sensor is still unclear"""
-"""class Bypasswitch(IndevoltSwitchEntity):
-
-    _attr_name = "Bypass"
-    _attr_icon = "mdi:transmission-tower"
-
-    def _get_write_cjson_point(self) -> str:
-        return "7266"
-
-    def _get_switch_state(self) -> bool:
-        val = self.coordinator.data.get("2618")
-        return val != 1000 """
-
-
-"""Switch for enabling / disabling LED light."""
-"""Placeholder: The read point for this sensor is still unclear"""
-"""class Bypasswitch(IndevoltSwitchEntity):
-
-    _attr_name = "Light Indicator"
-    _attr_icon = "mdi:light"
-
-    def _get_write_cjson_point(self) -> str:
-        return "7265"
-
-    def _get_switch_state(self) -> bool:
-        val = self.coordinator.data.get("2618")
-        return val != 1000 """
