@@ -37,6 +37,7 @@ The Indevolt integration provides sensors for monitoring your device, as well as
 #### BK1600/BK1600Ultra (Generation 1)
 
 - Serial number
+- Mode
 - Working mode
 - DC input power (2 channels, W)
 - Daily production (kWh)
