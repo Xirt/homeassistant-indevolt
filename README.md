@@ -88,6 +88,8 @@ All Generation 1 sensors, plus:
 - Inverter input limit: Set maximum PV input power (W)
 - Feed-in power limit: Configure grid feed-in power limit (W)
 - Grid charging: Enable or disable charging from the grid (switch)
+- Led indicator: Enable or disable the led indicator (switch)
+- Bypass: Enable or disable the bypass (switch)
 
 ### Actions
 
