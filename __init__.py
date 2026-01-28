@@ -111,6 +111,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def discharge(call: ServiceCall) -> None:
         """Handle the service call to start discharging."""
         device_id = call.data[CONF_DEVICE_ID]
+        target_soc = call.data["target_soc"]
         power = call.data["power"]
 
         coordinator = await _get_coordinator_from_device(hass, device_id)
@@ -125,15 +126,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
         # Ensure device is in Real-time Control mode
         if await _switch_working_mode(coordinator, 4):
-            emergency_soc = coordinator.data.get("6105", 10)
+            #emergency_soc = coordinator.data.get("6105", 10) #use target_soc
 
             _LOGGER.info(
-                "Discharging %s with power: %s, emergency SOC: %s",
+                "Discharging %s with power: %s, target SOC: %s",
                 device_id,
                 power,
-                emergency_soc,
+                target_soc,
             )
-            await coordinator.async_push_data("47015", [2, power, emergency_soc])
+            await coordinator.async_push_data("47015", [2, power, target_soc])
             await coordinator.async_request_refresh()
 
     async def stop(call: ServiceCall) -> None:
@@ -149,7 +150,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             await coordinator.async_request_refresh()
 
     hass.services.async_register(DOMAIN, "charge", charge, schema=SERVICE_SCHEMA)           # Check this -> should we make this cleaner (somehow)?
-    hass.services.async_register(DOMAIN, "discharge", discharge, schema=SERVICE_SCHEMA)
+    hass.services.async_register(DOMAIN, "discharge", discharge, schema=SERVICE_SCHEMA)    # defines that target_soc is required like in charge
     hass.services.async_register(DOMAIN, "stop", stop, schema=STOP_SERVICE_SCHEMA)
     hass.services.async_register(DOMAIN, "change_mode", set_mode, schema=CHANGE_MODE_SERVICE_SCHEMA)
 
