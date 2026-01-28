@@ -134,6 +134,7 @@ target:
   device_id: YOUR_DEVICE_ID
 data:
   power: 800
+  target_soc: 30
 ```
 
 #### Stop battery (real-time mode)
